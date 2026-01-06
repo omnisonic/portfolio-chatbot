@@ -12,13 +12,75 @@ selected_llm_engine = "xiaomi/mimo-v2-flash:free"
 
 # Load portfolio data
 def load_portfolio_data():
+    data = []
     try:
         with open('scraped_data.json', 'r') as f:
             data = json.load(f)
-        return data
     except Exception as e:
-        st.error(f"Error loading portfolio data: {e}")
-        return []
+        st.error(f"Error loading scraped_data.json: {e}")
+    
+    try:
+        with open('rudy-knowledge-v01.md', 'r') as f:
+            knowledge_content = f.read()
+        # Parse the markdown file and convert to a format similar to scraped_data
+        knowledge_data = parse_knowledge_base(knowledge_content)
+        data.extend(knowledge_data)
+    except Exception as e:
+        st.error(f"Error loading rudy-knowledge-v01.md: {e}")
+    
+    return data
+
+# Parse the knowledge base markdown file
+def parse_knowledge_base(content):
+    """Parse the markdown knowledge base and convert to list of knowledge items"""
+    knowledge_items = []
+    lines = content.split('\n')
+    
+    current_item = {}
+    current_content = []
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Check for chunk headers
+        if line.startswith('<!-- chunk:id='):
+            # Save previous item if exists
+            if current_item:
+                if 'description' not in current_item:
+                    current_item['description'] = '\n'.join(current_content).strip()
+                knowledge_items.append(current_item)
+                current_content = []
+            
+            # Start new item
+            current_item = {'type': 'knowledge'}
+            # Extract chunk ID and tags
+            chunk_info = line.replace('<!-- chunk:id=', '').replace(' -->', '')
+            parts = chunk_info.split('; ')
+            if parts:
+                current_item['header'] = parts[0].replace('-', ' ').title()
+                if len(parts) > 1:
+                    tags = parts[1].replace('tags=', '').split(',')
+                    current_item['tags'] = tags
+        
+        # Check for knowledge base title
+        elif line.startswith('# Rudy Knowledge Base'):
+            continue
+            
+        # Skip empty lines between chunks
+        elif line == '' and not current_content:
+            continue
+            
+        # Add content lines
+        elif line and not line.startswith('<!--'):
+            current_content.append(line)
+    
+    # Add the last item
+    if current_item and current_content:
+        if 'description' not in current_item:
+            current_item['description'] = '\n'.join(current_content).strip()
+        knowledge_items.append(current_item)
+    
+    return knowledge_items
 
 portfolio_data = load_portfolio_data()
 
@@ -28,15 +90,34 @@ def create_portfolio_context():
         return "No portfolio data available."
     
     context_parts = []
-    for item in portfolio_data:
-        if item.get('header') and item.get('description'):
-            context_parts.append(f"Project: {item['header']}")
-            context_parts.append(f"Description: {item['description']}")
-            if item.get('image_urls'):
-                context_parts.append(f"Images: {', '.join(item['image_urls'])}")
-            if item.get('links'):
-                context_parts.append(f"Links: {', '.join(item['links'])}")
-            context_parts.append("---")
+    
+    # Separate projects from knowledge items
+    projects = [item for item in portfolio_data if 'image_urls' in item or 'links' in item]
+    knowledge = [item for item in portfolio_data if 'type' in item and item['type'] == 'knowledge']
+    
+    # Add projects section
+    if projects:
+        context_parts.append("=== PORTFOLIO PROJECTS ===")
+        for item in projects:
+            if item.get('header') and item.get('description'):
+                context_parts.append(f"Project: {item['header']}")
+                context_parts.append(f"Description: {item['description']}")
+                if item.get('image_urls'):
+                    context_parts.append(f"Images: {', '.join(item['image_urls'])}")
+                if item.get('links'):
+                    context_parts.append(f"Links: {', '.join(item['links'])}")
+                context_parts.append("---")
+    
+    # Add knowledge section
+    if knowledge:
+        context_parts.append("\n=== RUDY'S KNOWLEDGE & BACKGROUND ===")
+        for item in knowledge:
+            if item.get('header') and item.get('description'):
+                context_parts.append(f"{item['header']}:")
+                context_parts.append(item['description'])
+                if item.get('tags'):
+                    context_parts.append(f"Tags: {', '.join(item['tags'])}")
+                context_parts.append("---")
     
     return "\n".join(context_parts)
 
