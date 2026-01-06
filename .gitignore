@@ -53,8 +53,6 @@ htmlcov/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# scraped data (if you don't want to commit generated data)
-scraped_data.json
 
 # OS
 .DS_Store
