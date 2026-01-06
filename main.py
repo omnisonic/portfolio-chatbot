@@ -58,7 +58,13 @@ st.write("**Ask me about the portfolio work!**")
 
 
 if "messages" not in st.session_state:
-    st.session_state["messages"] = []  # Initialize an empty list for chat messages
+    # Initialize with a greeting from Rudy
+    st.session_state["messages"] = [
+        {
+            "role": "assistant", 
+            "content": "Hi! I'm Rudy, a graphic designer and product branding specialist. Welcome to my portfolio! Feel free to ask me about my work, projects, or capabilities."
+        }
+    ]
 
 prompt = st.chat_input("Ask a question...", key="chat_input")
 
