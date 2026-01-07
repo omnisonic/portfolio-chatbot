@@ -1,14 +1,10 @@
 import streamlit as st
 from openai import OpenAI
 import json
+import re
 
-# Define the LLM engines and their corresponding IDs
-llm_engines = {
-    "xiaomi/mimo-v2-flash:free": "xiaomi/mimo-v2-flash:free",
-}
-
-# Initialize the selected LLM engine
-selected_llm_engine = "xiaomi/mimo-v2-flash:free"
+# LLM configuration
+SELECTED_LLM_ENGINE = "xiaomi/mimo-v2-flash:free"
 
 # Load portfolio data
 def load_portfolio_data():
@@ -123,6 +119,30 @@ def create_portfolio_context():
 
 portfolio_context = create_portfolio_context()
 
+# System message template
+SYSTEM_MESSAGE = f"""You are a graphic designer and product branding specialist. 
+
+CONTEXT - Portfolio Data:
+{portfolio_context}
+
+INSTRUCTIONS:
+1. Use the portfolio context above to answer questions about the work
+5. If the project has links, include them in your response
+6. Be conversational but knowledgeable about the portfolio
+7. Always end your response by asking: "Would you like to see another example?"
+8. When displaying images or links, use markdown format: [text](url) or ![alt](url)"""
+
+# Initialize OpenAI client
+def get_openai_client():
+    return OpenAI(
+        base_url=st.secrets.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=st.secrets["OPENROUTER_API_KEY"],
+    )
+
+# Get model name
+def get_model_name():
+    return st.secrets.get("MODEL_NAME", SELECTED_LLM_ENGINE)
+
 # Create the Streamlit app
 st.title("Portfolio Chatbot")
 
@@ -149,7 +169,7 @@ assistant_avatar = "images/rudy_avatar_sm.jpg"
 # Add responsive CSS for mobile devices
 st.markdown("""
 <style>
-    /* Assistant avatar wrapper - containers around st.image() */
+    /* Assistant avatar styling */
     .assistant-avatar-wrapper {
         display: flex !important;
         justify-content: center !important;
@@ -157,28 +177,18 @@ st.markdown("""
         width: 100% !important;
     }
     
-    /* Target st.image() containers for assistant avatars */
-    .assistant-avatar-wrapper div[data-testid="stVerticalBlock"] {
-        width: 80px !important;
-        height: 80px !important;
-        overflow: hidden !important;
-        border-radius: 50% !important;
-    }
-    
+    .assistant-avatar-wrapper div[data-testid="stVerticalBlock"],
     .assistant-avatar-wrapper img {
         width: 80px !important;
         height: 80px !important;
         object-fit: cover !important;
         border-radius: 50% !important;
+        overflow: hidden !important;
     }
     
-    /* Mobile responsive avatar sizing */
+    /* Mobile responsive */
     @media (max-width: 768px) {
-        .assistant-avatar-wrapper div[data-testid="stVerticalBlock"] {
-            width: 50px !important;
-            height: 50px !important;
-        }
-        
+        .assistant-avatar-wrapper div[data-testid="stVerticalBlock"],
         .assistant-avatar-wrapper img {
             width: 50px !important;
             height: 50px !important;
@@ -191,32 +201,16 @@ st.markdown("""
         }
     }
     
-    /* Desktop avatar sizing */
-    @media (min-width: 769px) {
-        .assistant-message-container {
-            margin-top: 0 !important;
-        }
+    /* Content styling */
+    .assistant-message-container {
+        margin-top: 0 !important;
     }
     
-    /* Ensure proper spacing */
-    .stMarkdown {
-        margin: 0 !important;
-    }
-    
-    /* Ensure content images remain rectangular */
-    .assistant-message-container img {
-        border-radius: 8px !important;
-        max-width: 100% !important;
-        height: auto !important;
-        width: auto !important;
-    }
-    
-    /* Make sure related images section images stay rectangular */
+    .assistant-message-container img,
     div[data-testid="stVerticalBlock"] img:not(.assistant-avatar-wrapper img) {
         border-radius: 8px !important;
         max-width: 100% !important;
         height: auto !important;
-        width: auto !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -242,10 +236,9 @@ for msg in st.session_state.messages:
 if len(st.session_state.messages) == 1 and st.session_state.messages[0]["role"] == "assistant":
     st.write("**You can ask things like:**")
     suggested_questions = [
-    
         "Can you show me your branding work?",
         "What's your design process like?",
-            "Can you tell me a joke?",
+        "Can you tell me a joke?",
     ]
     
     # Display buttons vertically
@@ -255,35 +248,15 @@ if len(st.session_state.messages) == 1 and st.session_state.messages[0]["role"] 
             # Add user message to history
             st.session_state.messages.append({"role": "user", "content": question})
             
-            # gets API Key from Streamlit secrets
-            client = OpenAI(
-            base_url=st.secrets.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-            api_key=st.secrets["OPENROUTER_API_KEY"],
-            )
-            
+            # Initialize client and get response
+            client = get_openai_client()
             response = client.chat.completions.create(
-            model=st.secrets.get("MODEL_NAME", selected_llm_engine),
-            messages=[
-                {
-                "role": "system",
-                "content": f"""You are a graphic designer and product branding specialist. 
-
-CONTEXT - Portfolio Data:
-{portfolio_context}
-
-INSTRUCTIONS:
-1. Use the portfolio context above to answer questions about the work
-2. When relevant, mention ONE specific project and its details only
-3. Keep your response focused on a single example
-4. If the project has images, include ONE image in your response
-5. If the project has links, include them in your response
-6. Be conversational but knowledgeable about the portfolio
-7. Always end your response by asking: "Would you like to see another example?"
-8. When displaying images or links, use markdown format: [text](url) or ![alt](url)""",
-                },
-            ]+ st.session_state.messages + [{"role": "user", "content": question}],
-            max_tokens=500,
-                )
+                model=get_model_name(),
+                messages=[
+                    {"role": "system", "content": SYSTEM_MESSAGE},
+                ] + st.session_state.messages + [{"role": "user", "content": question}],
+                max_tokens=1000,
+            )
             
             msg = response.choices[0].message.content
             st.session_state.messages.append({"role": "assistant", "content": msg})
@@ -295,35 +268,15 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # gets API Key from Streamlit secrets
-    client = OpenAI(
-    base_url=st.secrets.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-    api_key=st.secrets["OPENROUTER_API_KEY"],
-    )
-    
+    # Initialize client and get response
+    client = get_openai_client()
     response = client.chat.completions.create(
-    model=st.secrets.get("MODEL_NAME", selected_llm_engine),
-    messages=[
-        {
-        "role": "system",
-        "content": f"""You are a graphic designer and product branding specialist. 
-
-CONTEXT - Portfolio Data:
-{portfolio_context}
-
-INSTRUCTIONS:
-1. Use the portfolio context above to answer questions about the work
-2. When relevant, mention ONE specific project and its details only
-3. Keep your response focused on a single example
-4. If the project has images, include ONE image in your response
-5. If the project has links, include them in your response
-6. Be conversational but knowledgeable about the portfolio
-7. Always end your response by asking: "Would you like to see another example?"
-8. When displaying images or links, use markdown format: [text](url) or ![alt](url)""",
-        },
-    ]+ st.session_state.messages + [{"role": "user", "content": prompt}],
-    max_tokens=500,
-        )
+        model=get_model_name(),
+        messages=[
+            {"role": "system", "content": SYSTEM_MESSAGE},
+        ] + st.session_state.messages,
+        max_tokens=1000,
+    )
     
     msg = response.choices[0].message.content
     st.session_state.messages.append({"role": "assistant", "content": msg})
@@ -338,7 +291,6 @@ INSTRUCTIONS:
         st.markdown(f'<div class="assistant-message-container">{msg}</div>', unsafe_allow_html=True)
     
     # Parse and display any images mentioned in the response
-    import re
     image_urls = re.findall(r'https?://[^\s\)]+(?:\.jpg|\.jpeg|\.png|\.gif|\.webp)', msg)
     if image_urls:
         st.write("**Related Images:**")
