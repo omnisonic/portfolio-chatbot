@@ -2,7 +2,7 @@
 
 A standalone Streamlit chatbot that answers questions about a creative professional's portfolio using OpenAI API via OpenRouter.
 
-![Portfolio Screenshot](https://github.com/omnisonic/portfolio-chatbot/blob/main/images/screen%20shot%20portfolio-chatbot.JPG)
+![Portfolio Screenshot](/images/screen%20shot%20portfolio-chatbot.JPG)
 
 ## Features
 
