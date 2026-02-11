@@ -1,5 +1,8 @@
 # Portfolio Chatbot - Standalone Streamlit App
 
+![Photo](images/screenshot-2026-02-07-at-9.26.58am.webp)
+
+
 
 A standalone Streamlit chatbot that answers questions about a creative professional's portfolio using OpenAI API via OpenRouter.
 
